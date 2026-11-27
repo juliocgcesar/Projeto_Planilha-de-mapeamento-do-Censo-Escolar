@@ -27,7 +27,6 @@ df_esc = pd.read_csv(
 )
 df_esc.columns = df_esc.columns.str.upper()
 
-# Tabela auxiliar geográfica (códigos IBGE)
 df_aux_municipios = (
     df_esc[["CO_MUNICIPIO", "NO_MUNICIPIO", "SG_UF", "CO_REGIAO"]]
     .dropna(subset=["CO_MUNICIPIO"])
@@ -35,7 +34,6 @@ df_aux_municipios = (
     .copy()
 )
 
-# Filtro estadual integral: todas as escolas de Sergipe (todos os 75 municípios)
 base_se = (
     df_esc[df_esc["SG_UF"] == "SE"]
     .dropna(subset=["CO_ENTIDADE", "CO_MUNICIPIO"])
@@ -201,7 +199,6 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         ws.freeze_panes = "A3"
         ws.auto_filter.ref = f"A2:{get_column_letter(max_col)}{max_row}"
 
-    # Rodapé dinâmico na aba tratada (logo após a última escola)
     ultima_linha_dados = total_registros + 2
     row_base = ultima_linha_dados + 2
     r_ativa = row_base + 1
@@ -246,7 +243,6 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         c_pct.alignment = Alignment(horizontal="right", vertical="center")
         c_pct.number_format = "0.0%"
 
-    # Aba 3: Resumo e Indicadores Estaduais
     ws_res.merge_cells("A1:D1")
     c_t3 = ws_res.cell(row=1, column=1, value=f"INDICADORES CONSOLIDADOS — CENSO ESCOLAR 2020 (SERGIPE — {total_municipios} MUNICÍPIOS)")
     c_t3.fill = fill_banner

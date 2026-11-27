@@ -7,7 +7,6 @@ df = pd.read_excel(
     skiprows=1,
 )
 
-# Remove as linhas do quadro de resumo no rodapé da planilha
 df = df[pd.to_numeric(df["Código INEP"], errors="coerce").notna()].copy()
 
 cols_inteiras = [

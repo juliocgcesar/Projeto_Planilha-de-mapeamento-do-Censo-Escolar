@@ -15,6 +15,18 @@ Este repositório reúne a documentação e os scripts de um processo **ETL (Ext
 
 ---
 
+## Fonte dos Dados
+
+Os dados brutos utilizados neste projeto foram extraídos do portal oficial de Dados Abertos do **Instituto Nacional de Estudos e Pesquisas Educacionais Anísio Teixeira (INEP)**:
+
+- **Base de Dados:** Microdados do Censo Escolar da Educação Básica — Edição 2020
+- **Portal Oficial (Download):** [https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/censo-escolar](https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/censo-escolar)
+- **Recorte Utilizado:** Tabela de escolas (`microdados_ed_basica_2020.csv`), filtrada integralmente para a Unidade Federativa de **Sergipe (`SG_UF = SE`)**, totalizando **2.551 instituições de ensino** nos **75 municípios** do estado.
+
+> **Nota:** Os arquivos brutos originais (`.zip` / `.csv`) não estão versionados neste repositório devido ao tamanho elevado do conjunto nacional; para reproduzir o processo ETL localmente, basta baixar o pacote referente a **2020** no link acima e extrair a base de dados antes de executar os scripts.
+
+---
+
 ## Estrutura do Repositório
 
 | Arquivo / Pasta | Descrição |
@@ -59,3 +71,14 @@ Para validar a integridade das regras de transformação em toda a rede estadual
 1. **Pré-requisitos:** Python 3.10+ com as bibliotecas `pandas` e `openpyxl` instaladas:
    ```bash
    pip install pandas openpyxl
+   ```
+
+2. **Extração, filtragem estadual e auditoria:** baixe os microdados do Censo Escolar 2020 no portal do INEP e execute o script de processamento:
+   ```bash
+   python processar_censo.py
+   ```
+
+3. **Geração do esquema estrela (`.xlsx` e `.sql`):** execute o script de modelagem dimensional:
+   ```bash
+   python modelo_estrela.py
+   ```
