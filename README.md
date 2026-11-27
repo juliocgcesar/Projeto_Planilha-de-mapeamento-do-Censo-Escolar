@@ -11,7 +11,7 @@ Projeto desenvolvido para a disciplina **Laboratório de Banco de Dados** (Curso
 
 Os microdados públicos do Censo Escolar disponibilizados pelo **INEP** reúnem informações detalhadas sobre infraestrutura, docentes e matrículas da educação básica, mas são distribuídos em tabelas planas extensas com variáveis codificadas numericamente e campos ausentes em escolas inativas.
 
-Este repositório reúne a documentação e os scripts de um processo **ETL (Extração, Transformação e Carga)** aplicado aos microdados da edição de **2020** para o estado de **Sergipe (`SG_UF = SE`)**, estruturando os dados em um modelo dimensional do tipo **esquema estrela** e validando as regras de limpeza em uma amostra controlada de **100 escolas**.
+Este repositório reúne a documentação e os scripts de um processo **ETL (Extração, Transformação e Carga)** aplicado aos microdados da edição de **2020** para a base integral do estado de **Sergipe (`SG_UF = SE`)**, abrangendo todas as **2.551 escolas distribuídas pelos 75 municípios sergipanos**, estruturando os dados em um modelo dimensional do tipo **esquema estrela** e auditando 100% dos registros carregados.
 
 ---
 
@@ -21,11 +21,12 @@ Este repositório reúne a documentação e os scripts de um processo **ETL (Ext
 | :--- | :--- |
 | `dicionário/` | Dicionário oficial de variáveis da Educação Básica (INEP) utilizado para validar tipos de dados e domínios codificados. |
 | `modelo estrela censo.xlsx` | Planilha de mapeamento origem-destino (*de-para*) com as regras de limpeza, tipagem e conversão de códigos. |
-| `modelo_estrela_censo.sql` | Script SQL (DDL) com a estrutura física da tabela fato e das três tabelas dimensão. |
+| `modelo_estrela_censo.sql` | Script SQL (DDL e `INSERT`) com a estrutura física e a carga completa da tabela fato e das três tabelas dimensão. |
 | `modelo_estrela.png` | Diagrama de relacionamento do esquema estrela implementado. |
-| `processar_censo.py` | Script em Python para leitura dos microdados brutos do INEP, filtragem para Sergipe e separação da amostra de 100 escolas. |
-| `modelo_estrela.py` | Script em Python para transformação dos domínios, tratamento de nulos estruturais, geração das chaves substitutas e auditoria. |
-| `auditoria_censo_2020.xlsx` | Planilha de auditoria gerada pelo script confrontando os 100 registros brutos com os dados tratados. |
+| `processar_censo.py` | Script em Python para leitura dos microdados brutos do INEP, filtragem estadual integral para Sergipe (75 municípios), conversão de domínios e auditoria. |
+| `modelo_estrela.py` | Script em Python para deduplicação das dimensões, geração das chaves substitutas (`sk_*`) e exportação das tabelas do esquema estrela em `.xlsx` e `.sql`. |
+| `auditoria_censo_2020.xlsx` | Planilha de auditoria gerada pelo script confrontando os 2.551 registros brutos com os dados tratados e indicadores consolidados. |
+| `modelo_estrela_censo.xlsx` | Pasta de trabalho com as abas populadas do modelo dimensional (`Fato_Censo_Escolar`, `Dim_Escola`, `Dim_Localizacao` e `Dim_Infraestrutura`). |
 
 ---
 
@@ -33,23 +34,23 @@ Este repositório reúne a documentação e os scripts de um processo **ETL (Ext
 
 O Data Warehouse foi modelado com **1 tabela fato** e **3 tabelas dimensão**, desacopladas das chaves naturais por meio de chaves substitutas inteiras (`sk_*`):
 
-- **`Fato_Censo_Escolar`**: armazena o ano do censo (`nu_ano_censo`), as chaves estrangeiras das dimensões e as métricas quantitativas (`qt_matriculas_bas`, `qt_matriculas_prof`, `qt_docentes_bas` e `qt_turmas_bas`).
-- **`Dim_Escola`** (`sk_escola`): identificação cadastral (`co_entidade`, `no_entidade`), dependência administrativa, situação de funcionamento e categoria da escola privada.
-- **`Dim_Localizacao`** (`sk_localizacao`): código e nome do município (IBGE), unidade federativa (`SE`), região geográfica e zona de localização (Urbana ou Rural).
-- **`Dim_Infraestrutura`** (`sk_infraestrutura`): indicadores de disponibilidade de água potável, energia elétrica, esgotamento sanitário, biblioteca, laboratório de informática e acesso à internet.
+- **`Fato_Censo_Escolar`** (**2.551 linhas**): armazena o ano do censo (`nu_ano_censo`), as chaves estrangeiras das dimensões e as métricas quantitativas (`qt_matriculas_bas`, `qt_matriculas_prof`, `qt_docentes_bas` e `qt_turmas_bas`).
+- **`Dim_Escola`** (`sk_escola` — **2.551 linhas**): identificação cadastral (`co_entidade`, `no_entidade`), dependência administrativa, situação de funcionamento e categoria da escola privada.
+- **`Dim_Localizacao`** (`sk_localizacao` — **149 linhas**): código e nome do município (IBGE) cobrindo todos os **75 municípios de Sergipe**, unidade federativa (`SE`), região geográfica e zona de localização (Urbana ou Rural).
+- **`Dim_Infraestrutura`** (`sk_infraestrutura` — **24 linhas**): perfis únicos de disponibilidade de água potável, energia elétrica, esgotamento sanitário, biblioteca, laboratório de informática e acesso à internet.
 
 ---
 
-## Resumo da Auditoria (Amostra de 100 Escolas)
+## Resumo da Auditoria (Base Integral de Sergipe — 75 Municípios)
 
-Para testar o comportamento das regras de transformação em diferentes cenários cadastrais, foi auditada uma amostra estratificada de 100 instituições de ensino sergipanas:
+Para validar a integridade das regras de transformação em toda a rede estadual antes da carga no Data Warehouse, foram auditadas todas as **2.551 instituições de ensino** dos 75 municípios de Sergipe:
 
-| Categoria de Auditoria | Quantidade | Percentual |
+| Situação / Categoria de Auditoria | Quantidade | Percentual |
 | :--- | :---: | :---: |
-| Escolas em atividade convertidas sem ressalvas | 75 | 75,0% |
-| Escolas paralisadas com nulos estruturais tratados | 24 | 24,0% |
-| Escolas extintas com nulos estruturais tratados | 1 | 1,0% |
-| **Total Auditado** | **100** | **100,0%** |
+| Escolas em atividade convertidas sem ressalvas | 2.085 | 81,7% |
+| Escolas paralisadas tratadas na carga | 428 | 16,8% |
+| Escolas extintas tratadas na carga | 38 | 1,5% |
+| **Total Auditado (Base Integral SE — 75 municípios)** | **2.551** | **100,0%** |
 
 ---
 
@@ -58,10 +59,3 @@ Para testar o comportamento das regras de transformação em diferentes cenário
 1. **Pré-requisitos:** Python 3.10+ com as bibliotecas `pandas` e `openpyxl` instaladas:
    ```bash
    pip install pandas openpyxl
-   ```
-2. **Fonte de dados:** Baixe o pacote oficial dos *Microdados da Educação Básica 2020* no portal do INEP e posicione o arquivo `microdados_ed_basica_2020.csv` na pasta configurada nos scripts.
-3. **Execução do pipeline:**
-   ```bash
-   python processar_censo.py
-   python modelo_estrela.py
-   ```
