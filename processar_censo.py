@@ -1,4 +1,4 @@
-#Codigo Utilizado para fazer a criação de uma tabela contendo os Dados filtrados apenas de Sergipe
+# Código para extração, transformação e auditoria integral das escolas de Sergipe (75 municípios)
 from pathlib import Path
 import pandas as pd
 from openpyxl.chart import BarChart, Reference
@@ -27,6 +27,7 @@ df_esc = pd.read_csv(
 )
 df_esc.columns = df_esc.columns.str.upper()
 
+# Tabela auxiliar geográfica (códigos IBGE)
 df_aux_municipios = (
     df_esc[["CO_MUNICIPIO", "NO_MUNICIPIO", "SG_UF", "CO_REGIAO"]]
     .dropna(subset=["CO_MUNICIPIO"])
@@ -34,11 +35,14 @@ df_aux_municipios = (
     .copy()
 )
 
-df_uf = df_esc[df_esc["SG_UF"] == "SE"].copy()
-
-ativas = df_uf[df_uf["TP_SITUACAO_FUNCIONAMENTO"] == 1].head(75)
-inativas = df_uf[df_uf["TP_SITUACAO_FUNCIONAMENTO"] != 1].head(25)
-amostra = pd.concat([ativas, inativas], ignore_index=True)
+# Filtro estadual integral: todas as escolas de Sergipe (todos os 75 municípios)
+base_se = (
+    df_esc[df_esc["SG_UF"] == "SE"]
+    .dropna(subset=["CO_ENTIDADE", "CO_MUNICIPIO"])
+    .sort_values(["NO_MUNICIPIO", "NO_ENTIDADE"])
+    .reset_index(drop=True)
+    .copy()
+)
 
 def mapear_dominio(serie, mapa, padrao="Não informado"):
     return pd.to_numeric(serie, errors="coerce").map(mapa).fillna(padrao)
@@ -47,31 +51,31 @@ def mapear_flag(serie):
     return mapear_dominio(serie, {0: "Não", 1: "Sim", 9: "Não informado"}, "Não informado")
 
 tratada = pd.DataFrame()
-tratada["Código INEP"] = amostra["CO_ENTIDADE"].astype(int)
-tratada["Nome da Escola"] = amostra["NO_ENTIDADE"].astype(str).str.strip().str.upper()
+tratada["Código INEP"] = base_se["CO_ENTIDADE"].astype(int)
+tratada["Nome da Escola"] = base_se["NO_ENTIDADE"].astype(str).str.strip().str.upper()
 tratada["Rede de Ensino"] = mapear_dominio(
-    amostra["TP_DEPENDENCIA"], {1: "Federal", 2: "Estadual", 3: "Municipal", 4: "Privada"}
+    base_se["TP_DEPENDENCIA"], {1: "Federal", 2: "Estadual", 3: "Municipal", 4: "Privada"}
 )
 tratada["Situação de Funcionamento"] = mapear_dominio(
-    amostra["TP_SITUACAO_FUNCIONAMENTO"], {1: "Em atividade", 2: "Paralisada", 3: "Extinta"}
+    base_se["TP_SITUACAO_FUNCIONAMENTO"], {1: "Em atividade", 2: "Paralisada", 3: "Extinta"}
 )
 tratada["Categoria Privada"] = mapear_dominio(
-    amostra["TP_CATEGORIA_ESCOLA_PRIVADA"],
+    base_se["TP_CATEGORIA_ESCOLA_PRIVADA"],
     {1: "Particular", 2: "Comunitária", 3: "Confessional", 4: "Filantrópica"},
     "Não se aplica"
 )
 
-amostra_geo = amostra[["CO_MUNICIPIO", "TP_LOCALIZACAO"]].merge(
+base_geo = base_se[["CO_MUNICIPIO", "TP_LOCALIZACAO"]].merge(
     df_aux_municipios, on="CO_MUNICIPIO", how="left"
 )
-tratada["Código IBGE"] = amostra_geo["CO_MUNICIPIO"].astype(int)
-tratada["Município"] = amostra_geo["NO_MUNICIPIO"].astype(str).str.strip()
-tratada["UF"] = amostra_geo["SG_UF"].astype(str).str.strip()
+tratada["Código IBGE"] = base_geo["CO_MUNICIPIO"].astype(int)
+tratada["Município"] = base_geo["NO_MUNICIPIO"].astype(str).str.strip()
+tratada["UF"] = base_geo["SG_UF"].astype(str).str.strip()
 tratada["Região"] = mapear_dominio(
-    amostra_geo["CO_REGIAO"], {1: "Norte", 2: "Nordeste", 3: "Sudeste", 4: "Sul", 5: "Centro-Oeste"}
+    base_geo["CO_REGIAO"], {1: "Norte", 2: "Nordeste", 3: "Sudeste", 4: "Sul", 5: "Centro-Oeste"}
 )
 tratada["Localização"] = mapear_dominio(
-    amostra_geo["TP_LOCALIZACAO"], {1: "Urbana", 2: "Rural"}
+    base_geo["TP_LOCALIZACAO"], {1: "Urbana", 2: "Rural"}
 )
 
 for col_orig, col_dest in [
@@ -82,14 +86,14 @@ for col_orig, col_dest in [
     ("IN_LABORATORIO_INFORMATICA", "Lab. Informática"),
     ("IN_INTERNET", "Acesso à Internet"),
 ]:
-    tratada[col_dest] = mapear_flag(amostra[col_orig])
+    tratada[col_dest] = mapear_flag(base_se[col_orig])
 
-tratada["Ano Censo"] = amostra["NU_ANO_CENSO"].astype(int)
-tratada["Matrículas (Básica)"] = pd.to_numeric(amostra["QT_MAT_BAS"], errors="coerce").fillna(0).astype(int)
-col_prof = amostra["QT_MAT_PROF"] if "QT_MAT_PROF" in amostra.columns else 0
+tratada["Ano Censo"] = base_se["NU_ANO_CENSO"].astype(int)
+tratada["Matrículas (Básica)"] = pd.to_numeric(base_se["QT_MAT_BAS"], errors="coerce").fillna(0).astype(int)
+col_prof = base_se["QT_MAT_PROF"] if "QT_MAT_PROF" in base_se.columns else 0
 tratada["Matrículas (Profissional)"] = pd.to_numeric(col_prof, errors="coerce").fillna(0).astype(int)
-tratada["Docentes"] = pd.to_numeric(amostra["QT_DOC_BAS"], errors="coerce").fillna(0).astype(int)
-tratada["Turmas"] = pd.to_numeric(amostra["QT_TUR_BAS"], errors="coerce").fillna(0).astype(int)
+tratada["Docentes"] = pd.to_numeric(base_se["QT_DOC_BAS"], errors="coerce").fillna(0).astype(int)
+tratada["Turmas"] = pd.to_numeric(base_se["QT_TUR_BAS"], errors="coerce").fillna(0).astype(int)
 
 cols_infra = [
     "IN_AGUA_POTAVEL", "IN_ENERGIA_REDE_PUBLICA", "IN_ESGOTO_REDE_PUBLICA",
@@ -97,16 +101,18 @@ cols_infra = [
 ]
 
 def classificar_auditoria(idx):
-    linha_bruta = amostra.loc[idx]
-    if linha_bruta["TP_SITUACAO_FUNCIONAMENTO"] != 1 and linha_bruta[cols_infra].isna().any():
+    linha_bruta = base_se.loc[idx]
+    if linha_bruta["TP_SITUACAO_FUNCIONAMENTO"] != 1 and (
+        linha_bruta[cols_infra].isna().any() or pd.isna(linha_bruta["QT_MAT_BAS"])
+    ):
         return "Nulos estruturais (escola paralisada/extinta)"
-    if (linha_bruta[cols_infra] == 9).any():
-        return "Código 9 (Não informado) convertido"
+    if (linha_bruta[cols_infra] == 9).any() or linha_bruta[cols_infra].isna().any():
+        return "Código 9 ou nulo convertido para 'Não informado'"
     if str(linha_bruta["NO_ENTIDADE"]) != str(linha_bruta["NO_ENTIDADE"]).strip():
         return "Espaçamento irregular corrigido no nome"
     return "Convertido integralmente sem ressalvas"
 
-auditoria = pd.Series([classificar_auditoria(i) for i in amostra.index])
+auditoria = pd.Series([classificar_auditoria(i) for i in base_se.index])
 resumo_auditoria = (
     auditoria.value_counts()
     .rename_axis("Categoria de Auditoria")
@@ -114,19 +120,17 @@ resumo_auditoria = (
 )
 resumo_auditoria["Percentual"] = resumo_auditoria["Quantidade"] / len(tratada)
 
-status_estado = mapear_dominio(
-    df_uf["TP_SITUACAO_FUNCIONAMENTO"], {1: "Em atividade", 2: "Paralisada", 3: "Extinta"}
-).value_counts()
+total_registros = len(tratada)
+total_municipios = tratada["Código IBGE"].nunique()
 
 saida = "auditoria_censo_2020.xlsx"
 with pd.ExcelWriter(saida, engine="openpyxl") as writer:
-    # startrow=1 reserva a linha 1 para o título explicativo da aba
-    amostra.to_excel(writer, sheet_name="1_Amostra_Bruta_100", index=False, startrow=1)
-    tratada.to_excel(writer, sheet_name="2_Amostra_Tratada_100", index=False, startrow=1)
+    base_se.to_excel(writer, sheet_name="1_Base_Bruta_SE", index=False, startrow=1)
+    tratada.to_excel(writer, sheet_name="2_Base_Tratada_SE", index=False, startrow=1)
 
     wb = writer.book
-    ws_bruta = wb["1_Amostra_Bruta_100"]
-    ws_trat = wb["2_Amostra_Tratada_100"]
+    ws_bruta = wb["1_Base_Bruta_SE"]
+    ws_trat = wb["2_Base_Tratada_SE"]
     ws_res = wb.create_sheet(title="3_Resumo_e_Indicadores")
 
     fill_banner = PatternFill("solid", fgColor="1B365D")
@@ -148,8 +152,8 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
     border_total = Border(top=borda_suave, bottom=borda_media, left=borda_suave, right=borda_suave)
 
     titulos_abas = {
-        "1_Amostra_Bruta_100": "DADOS BRUTOS EXTRAÍDOS DO INEP — AMOSTRA DE 100 ESCOLAS (CENSO ESCOLAR 2020 - SE)",
-        "2_Amostra_Tratada_100": "DADOS TRATADOS E PADRONIZADOS PARA O MODELO ESTRELA — AMOSTRA DE 100 ESCOLAS (SE)",
+        "1_Base_Bruta_SE": f"DADOS BRUTOS EXTRAÍDOS DO INEP — BASE INTEGRAL DE SERGIPE ({total_registros} ESCOLAS / {total_municipios} MUNICÍPIOS)",
+        "2_Base_Tratada_SE": f"DADOS TRATADOS E PADRONIZADOS PARA O MODELO ESTRELA — SERGIPE ({total_registros} ESCOLAS / {total_municipios} MUNICÍPIOS)",
     }
 
     for ws in [ws_bruta, ws_trat]:
@@ -163,7 +167,6 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         c_top.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         ws.row_dimensions[1].height = 28
 
-        # Cabeçalho das colunas (Linha 2)
         ws.row_dimensions[2].height = 30
         for col_idx in range(1, max_col + 1):
             cell = ws.cell(row=2, column=col_idx)
@@ -172,7 +175,6 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = border_grid
 
-        # Linhas de dados (Linhas 3 a 102)
         for r in range(3, max_row + 1):
             ws.row_dimensions[r].height = 20
             for c in range(1, max_col + 1):
@@ -182,13 +184,12 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
                 if r % 2 == 0:
                     cell.fill = fill_zebra
 
-                if ws.title == "2_Amostra_Tratada_100" and c in (2, 7):
+                if ws.title == "2_Base_Tratada_SE" and c in (2, 7):
                     cell.alignment = Alignment(horizontal="left", vertical="center")
                 else:
                     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-                # Destaque visual na coluna "Situação de Funcionamento" (Coluna D = 4)
-                if ws.title == "2_Amostra_Tratada_100" and c == 4:
+                if ws.title == "2_Base_Tratada_SE" and c == 4:
                     val = str(cell.value)
                     if val == "Em atividade":
                         cell.fill = fill_ativa
@@ -200,20 +201,28 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         ws.freeze_panes = "A3"
         ws.auto_filter.ref = f"A2:{get_column_letter(max_col)}{max_row}"
 
-    row_base = 104
+    # Rodapé dinâmico na aba tratada (logo após a última escola)
+    ultima_linha_dados = total_registros + 2
+    row_base = ultima_linha_dados + 2
+    r_ativa = row_base + 1
+    r_paral = row_base + 2
+    r_ext = row_base + 3
+    r_sub = row_base + 4
+    r_tot = row_base + 5
+
     ws_trat.merge_cells(start_row=row_base, start_column=2, end_row=row_base, end_column=4)
-    c_rod = ws_trat.cell(row=row_base, column=2, value="RESUMO DE FUNCIONAMENTO DAS ESCOLAS (AMOSTRA)")
+    c_rod = ws_trat.cell(row=row_base, column=2, value="RESUMO DE FUNCIONAMENTO DAS ESCOLAS (SERGIPE)")
     c_rod.fill = fill_header
     c_rod.font = font_header
     c_rod.alignment = Alignment(horizontal="center", vertical="center")
     ws_trat.row_dimensions[row_base].height = 24
 
     linhas_rodape = [
-        ("Escolas Em Atividade (Ativas)", '=COUNTIF(D3:D102,"Em atividade")', "=C105/$C$109", fill_ativa),
-        ("Escolas Paralisadas (Atividades Suspensas)", '=COUNTIF(D3:D102,"Paralisada")', "=C106/$C$109", fill_paralisada),
-        ("Escolas Extintas (Encerradas / Abandonadas)", '=COUNTIF(D3:D102,"Extinta")', "=C107/$C$109", fill_extinta),
-        ("Subtotal Inativas (Paralisadas + Extintas)", "=C106+C107", "=D106+D107", fill_zebra),
-        ("Total Geral da Amostra", "=C105+C108", "=D105+D108", fill_total),
+        ("Escolas Em Atividade (Ativas)", f'=COUNTIF(D3:D{ultima_linha_dados},"Em atividade")', f"=C{r_ativa}/$C${r_tot}", fill_ativa),
+        ("Escolas Paralisadas (Atividades Suspensas)", f'=COUNTIF(D3:D{ultima_linha_dados},"Paralisada")', f"=C{r_paral}/$C${r_tot}", fill_paralisada),
+        ("Escolas Extintas (Encerradas / Abandonadas)", f'=COUNTIF(D3:D{ultima_linha_dados},"Extinta")', f"=C{r_ext}/$C${r_tot}", fill_extinta),
+        ("Subtotal Inativas (Paralisadas + Extintas)", f"=C{r_paral}+C{r_ext}", f"=D{r_paral}+D{r_ext}", fill_zebra),
+        ("Total Geral do Estado (SE)", f"=C{r_ativa}+C{r_sub}", f"=D{r_ativa}+D{r_sub}", fill_total),
     ]
 
     for idx, (rotulo, form_qtd, form_pct, preenchimento) in enumerate(linhas_rodape, start=row_base + 1):
@@ -237,8 +246,9 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         c_pct.alignment = Alignment(horizontal="right", vertical="center")
         c_pct.number_format = "0.0%"
 
-    ws_res.merge_cells("A1:E1")
-    c_t3 = ws_res.cell(row=1, column=1, value="INDICADORES CONSOLIDADOS — CENSO ESCOLAR 2020 (SERGIPE)")
+    # Aba 3: Resumo e Indicadores Estaduais
+    ws_res.merge_cells("A1:D1")
+    c_t3 = ws_res.cell(row=1, column=1, value=f"INDICADORES CONSOLIDADOS — CENSO ESCOLAR 2020 (SERGIPE — {total_municipios} MUNICÍPIOS)")
     c_t3.fill = fill_banner
     c_t3.font = font_banner
     c_t3.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -246,10 +256,9 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
 
     headers_q1 = [
         "Situação de Funcionamento (INEP)",
-        "Qtd. Amostra",
-        "% Amostra",
-        "Qtd. Estado (SE)",
+        "Qtd. Escolas (SE)",
         "% Estado (SE)",
+        "Municípios Atendidos",
     ]
     ws_res.row_dimensions[3].height = 26
     for col_i, h in enumerate(headers_q1, start=1):
@@ -266,16 +275,16 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
     ]
     for offset, (st_nome, cor_st) in enumerate(status_ordem, start=4):
         ws_res.row_dimensions[offset].height = 21
-        qtd_am = int((tratada["Situação de Funcionamento"] == st_nome).sum())
-        qtd_uf = int(status_estado.get(st_nome, 0))
+        sub_st = tratada[tratada["Situação de Funcionamento"] == st_nome]
+        qtd_uf = int(len(sub_st))
+        mun_uf = int(sub_st["Código IBGE"].nunique())
 
         c1 = ws_res.cell(row=offset, column=1, value=st_nome)
-        c2 = ws_res.cell(row=offset, column=2, value=qtd_am)
+        c2 = ws_res.cell(row=offset, column=2, value=qtd_uf)
         c3 = ws_res.cell(row=offset, column=3, value=f"=B{offset}/$B$7")
-        c4 = ws_res.cell(row=offset, column=4, value=qtd_uf)
-        c5 = ws_res.cell(row=offset, column=5, value=f"=D{offset}/$D$7")
+        c4 = ws_res.cell(row=offset, column=4, value=mun_uf)
 
-        for col_i, cel in enumerate((c1, c2, c3, c4, c5), start=1):
+        for col_i, cel in enumerate((c1, c2, c3, c4), start=1):
             cel.font = font_corpo
             cel.border = border_grid
             cel.fill = cor_st if col_i == 1 else PatternFill("solid", fgColor="FFFFFF")
@@ -283,11 +292,11 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
         c1.alignment = Alignment(horizontal="left", vertical="center")
         c2.alignment = c4.alignment = Alignment(horizontal="center", vertical="center")
         c2.number_format = c4.number_format = "#,##0"
-        c3.alignment = c5.alignment = Alignment(horizontal="right", vertical="center")
-        c3.number_format = c5.number_format = "0.0%"
+        c3.alignment = Alignment(horizontal="right", vertical="center")
+        c3.number_format = "0.0%"
 
     ws_res.row_dimensions[7].height = 22
-    tot_q1 = ["Total Geral", "=SUM(B4:B6)", "=SUM(C4:C6)", "=SUM(D4:D6)", "=SUM(E4:E6)"]
+    tot_q1 = ["Total Geral (Sergipe)", "=SUM(B4:B6)", "=SUM(C4:C6)", total_municipios]
     for col_i, val in enumerate(tot_q1, start=1):
         cel = ws_res.cell(row=7, column=col_i, value=val)
         cel.font = font_bold
@@ -303,7 +312,7 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
             cel.number_format = "0.0%"
 
     ws_res.row_dimensions[10].height = 26
-    for col_i, h in enumerate(["Categoria de Auditoria (100 Linhas)", "Quantidade", "Percentual"], start=1):
+    for col_i, h in enumerate([f"Categoria de Auditoria ({total_registros} Escolas - SE)", "Quantidade", "Percentual"], start=1):
         cel = ws_res.cell(row=10, column=col_i, value=h)
         cel.fill = fill_header
         cel.font = font_header
@@ -342,7 +351,7 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
     grafico = BarChart()
     grafico.type = "col"
     grafico.style = 10
-    grafico.title = "Situação das Escolas na Amostra (100 registros)"
+    grafico.title = f"Situação das Escolas em Sergipe ({total_registros} registros)"
     grafico.y_axis.title = "Nº de Escolas"
     grafico.legend = None
     dados_graf = Reference(ws_res, min_col=2, min_row=3, max_row=6)
@@ -351,7 +360,7 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
     grafico.set_categories(cats_graf)
     grafico.width = 14
     grafico.height = 8
-    ws_res.add_chart(grafico, "G3")
+    ws_res.add_chart(grafico, "F3")
 
     for ws in wb.worksheets:
         ws.views.sheetView[0].showGridLines = True
@@ -361,6 +370,8 @@ with pd.ExcelWriter(saida, engine="openpyxl") as writer:
             maior = max(comprimentos) if comprimentos else 14
             ws.column_dimensions[col_letra].width = min(max(maior + 4, 15), 44)
 
-print("\n=== RESUMO DE AUDITORIA (100 LINHAS) ===")
+print(f"\n=== RESUMO ESTADUAL (SERGIPE: {total_registros} ESCOLAS EM {total_municipios} MUNICÍPIOS) ===")
+print(tratada["Situação de Funcionamento"].value_counts().to_string())
+print("\n=== RESUMO DE AUDITORIA (BASE INTEGRAL SE) ===")
 print(resumo_auditoria.to_string(index=False))
 print(f"\nArquivo '{saida}' gerado com sucesso!")

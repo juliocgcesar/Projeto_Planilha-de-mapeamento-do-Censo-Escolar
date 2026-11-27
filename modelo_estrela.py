@@ -1,11 +1,21 @@
+# Código para geração do Esquema Estrela e script SQL para todos os municípios de Sergipe
 import pandas as pd
 
 df = pd.read_excel(
     "auditoria_censo_2020.xlsx",
-    sheet_name="2_Amostra_Tratada_100",
+    sheet_name="2_Base_Tratada_SE",
     skiprows=1,
-    nrows=100,
 )
+
+# Remove as linhas do quadro de resumo no rodapé da planilha
+df = df[pd.to_numeric(df["Código INEP"], errors="coerce").notna()].copy()
+
+cols_inteiras = [
+    "Código INEP", "Código IBGE", "Ano Censo",
+    "Matrículas (Básica)", "Matrículas (Profissional)", "Docentes", "Turmas"
+]
+for col in cols_inteiras:
+    df[col] = df[col].astype(int)
 
 cols_escola = [
     "Código INEP", "Nome da Escola", "Rede de Ensino",
@@ -82,7 +92,7 @@ with pd.ExcelWriter("modelo_estrela_censo.xlsx", engine="openpyxl") as writer:
     dim_localizacao.to_excel(writer, sheet_name="Dim_Localizacao", index=False)
     dim_infra.to_excel(writer, sheet_name="Dim_Infraestrutura", index=False)
 
-ddl = """-- MODELO ESTRELA - CENSO ESCOLAR 2020 (INEP)
+ddl = """-- MODELO ESTRELA - CENSO ESCOLAR 2020 (INEP - BASE INTEGRAL SERGIPE)
 CREATE TABLE Dim_Escola (
     sk_escola INTEGER PRIMARY KEY,
     co_entidade INTEGER NOT NULL,
@@ -130,7 +140,7 @@ def gerar_inserts(tabela, dataframe):
     for _, row in dataframe.iterrows():
         vals = []
         for v in row:
-            if isinstance(v, (int, float)):
+            if pd.notna(v) and isinstance(v, (int, float)):
                 vals.append(str(int(v)))
             else:
                 texto = str(v).replace("'", "''")
@@ -148,5 +158,5 @@ with open("modelo_estrela_censo.sql", "w", encoding="utf-8") as f:
 print("Modelo Estrela gerado com sucesso!")
 print(f"- Fato_Censo_Escolar: {len(fato_censo)} linhas")
 print(f"- Dim_Escola: {len(dim_escola)} linhas")
-print(f"- Dim_Localizacao: {len(dim_localizacao)} linhas")
+print(f"- Dim_Localizacao: {len(dim_localizacao)} linhas ({dim_localizacao['co_municipio'].nunique()} municípios)")
 print(f"- Dim_Infraestrutura: {len(dim_infra)} linhas")
